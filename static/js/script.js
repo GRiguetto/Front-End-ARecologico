@@ -377,6 +377,9 @@ async function montarDashboard() {
 
   const nomeContrato = new Map(contratos.map((c) => [c.id, c.descricao]));
 
+  const nomeCliente = new Map(clientes.map((c) => [c.id, c.nome]));
+  const clienteDoContrato = new Map(contratos.map((c) => [c.id, nomeCliente.get(c.clienteId)]));
+
   const [servicos, servicosRealizados] = await Promise.all(
     ['servicos', 'servicos-realizados'].map((recurso) => Repositorio.listar(recurso)));
   const nomeServico = new Map(servicos.map((s) => [s.id, s.descricao]));
@@ -432,10 +435,14 @@ async function montarDashboard() {
     desenharBarras('graficoEquipamentos', equipPorContrato, { rotular: (nome) => nome });
 
     const recentes = [...ordens].sort((a, b) => (b.dataAbertura || '').localeCompare(a.dataAbertura || '')).slice(0, 5);
-    desenharTabelaResumo('ultimasOs', ['Problema', 'Contrato', 'Status', 'Valor'],
-      recentes.map((o) => [o.descricaoProblema, nomeContrato.get(o.contratoId) ?? '-',
-        `<span class="selo selo-${o.status}">${formatarOpcao(o.status)}</span>`, o.valor ? formatarMoeda(o.valor) : '-']),
-      'Nenhuma OS no período.');
+    desenharTabelaResumo('ultimasOs',
+    ['Cliente', 'Problema', 'Funcionário', 'Status', 'Abertura', 'Encerramento', 'Valor'],
+   recentes.map((o) => [
+    clienteDoContrato.get(o.contratoId) ?? '-', o.descricaoProblema, nomeFuncionario.get(o.funcionarioId) ?? '-',
+    `<span class="selo selo-${o.status}">${formatarOpcao(o.status)}</span>`,
+    o.dataAbertura ? formatarData(o.dataAbertura) : '-', o.dataExecucao ? formatarData(o.dataExecucao) : '-',
+    o.valor ? formatarMoeda(o.valor) : '-']),
+    'Nenhuma OS no período.');
     desenharTabelaResumo('contratosVencendo', ['Contrato', 'Termina em'],
       vencendo.map((c) => [c.descricao, formatarData(c.dataFim)]), 'Nenhum contrato vence nos próximos 30 dias.');
   }
