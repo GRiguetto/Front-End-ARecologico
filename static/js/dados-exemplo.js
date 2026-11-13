@@ -3,7 +3,7 @@
 // Ao integrar o back-end, apague este arquivo e a tag <script> dele nas páginas.
 // =====================================================================
 function semearDadosDeExemplo() {
-  if (localStorage.getItem('arecologico_clientes')) return;
+  if (localStorage.getItem('arecologico_servicos-realizados')) return;
 
   const escolher = (lista, i) => lista[i % lista.length];
   const dia = (diasAtras) => new Date(Date.now() - diasAtras * 864e5).toLocaleDateString('sv-SE');
@@ -46,7 +46,15 @@ function semearDadosDeExemplo() {
       ...(status === 'CONCLUIDA' ? { dataExecucao: dia(diasAtras - 2) } : {}),
       descricaoProblema: escolher(problemas, i),
     };
+
+    
+
   })));
+
+  gravar('servicos-realizados', numerar(Array.from({ length: 60 }, (_, i) => ({
+    osId: (i % 36) + 1, servicoId: (i % 4) + 1, qtd: 1 + (i % 3),
+    valor: 150 + (i % 4) * 120, desconto: i % 5 === 0 ? 20 : 0,
+  }))));
 
   gravar('servicos', numerar(['Limpeza completa', 'Carga de gás', 'Instalação de split', 'Visita técnica']
     .map((descricao, i) => ({ descricao, valorServico: 150 + i * 120, dataInicio: dia(120 - i * 25) }))));

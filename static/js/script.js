@@ -370,10 +370,16 @@ function desenharTabelaResumo(idElemento, cabecalhos, linhas, textoVazio) {
 
 async function montarDashboard() {
   const seletor = document.getElementById('periodo');
+
   const [clientes, contratos, todasOrdens, funcionarios, equipamentos] = await Promise.all(
     ['clientes', 'contratos', 'ordensServico', 'funcionarios', 'equipamentos'].map((chave) => Repositorio.listar(ENTIDADES[chave].recurso)));
   const nomeFuncionario = new Map(funcionarios.map((f) => [f.id, f.nome]));
+
   const nomeContrato = new Map(contratos.map((c) => [c.id, c.descricao]));
+
+  const [servicos, servicosRealizados] = await Promise.all(
+    ['servicos', 'servicos-realizados'].map((recurso) => Repositorio.listar(recurso)));
+  const nomeServico = new Map(servicos.map((s) => [s.id, s.descricao]));
 
   function atualizar() {
     const dias = Number(seletor.value);
@@ -402,6 +408,14 @@ async function montarDashboard() {
       porFuncionario[nome] = (porFuncionario[nome] || 0) + (ordem.valor || 0);
     }
 
+    const idsOs = new Set(ordens.map((o) => o.id));
+    const liquidoPorServico = {};
+    for (const item of servicosRealizados.filter((s) => idsOs.has(s.osId))) {
+      const nome = nomeServico.get(item.servicoId) ?? 'Serviço';
+      liquidoPorServico[nome] = (liquidoPorServico[nome] || 0) + item.qtd * item.valor - (item.desconto || 0);
+    }
+    
+
     desenharFaturamentoMensal('graficoFaturamento', todasOrdens);
     desenharRosca('graficoStatus', contarPor(ordens, 'status'), COR_STATUS);
     desenharBarras('graficoTipoOs', contarPor(ordens, 'tipoOs'));
@@ -411,6 +425,7 @@ async function montarDashboard() {
     desenharBarras('graficoCidade', contarPor(clientes, 'cidade'), { rotular: (nome) => nome });
     desenharRosca('graficoTipoCliente', contarPor(clientes, 'tipoCliente'));
     desenharBarras('graficoPagamentoFuncionarios', pagamentos, { rotular: (nome) => nome, valor: formatarMoeda });
+    desenharBarras('graficoServicos', liquidoPorServico, { rotular: (nome) => nome, valor: formatarMoeda });
 
     const equipPorContrato = contarPor(
       equipamentos.map((e) => ({ contrato: nomeContrato.get(e.contratoId) ?? 'Sem contrato' })), 'contrato');
