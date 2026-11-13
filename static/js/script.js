@@ -370,8 +370,8 @@ function desenharTabelaResumo(idElemento, cabecalhos, linhas, textoVazio) {
 
 async function montarDashboard() {
   const seletor = document.getElementById('periodo');
-  const [clientes, contratos, todasOrdens, funcionarios] = await Promise.all(
-    ['clientes', 'contratos', 'ordensServico', 'funcionarios'].map((chave) => Repositorio.listar(ENTIDADES[chave].recurso)));
+  const [clientes, contratos, todasOrdens, funcionarios, equipamentos] = await Promise.all(
+    ['clientes', 'contratos', 'ordensServico', 'funcionarios', 'equipamentos'].map((chave) => Repositorio.listar(ENTIDADES[chave].recurso)));
   const nomeFuncionario = new Map(funcionarios.map((f) => [f.id, f.nome]));
   const nomeContrato = new Map(contratos.map((c) => [c.id, c.descricao]));
 
@@ -407,6 +407,10 @@ async function montarDashboard() {
     desenharBarras('graficoTipoContrato', contarPor(contratos, 'tipoContrato'));
     desenharBarras('graficoCidade', contarPor(clientes, 'cidade'), { rotular: (nome) => nome });
     desenharRosca('graficoTipoCliente', contarPor(clientes, 'tipoCliente'));
+
+    const equipPorContrato = contarPor(
+      equipamentos.map((e) => ({ contrato: nomeContrato.get(e.contratoId) ?? 'Sem contrato' })), 'contrato');
+    desenharBarras('graficoEquipamentos', equipPorContrato, { rotular: (nome) => nome });
 
     const recentes = [...ordens].sort((a, b) => (b.dataAbertura || '').localeCompare(a.dataAbertura || '')).slice(0, 5);
     desenharTabelaResumo('ultimasOs', ['Problema', 'Contrato', 'Status', 'Valor'],
