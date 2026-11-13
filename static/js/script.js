@@ -383,6 +383,8 @@ async function montarDashboard() {
     const emAberto = ordens.filter((o) => ['ABERTA', 'EM_ANDAMENTO'].includes(o.status)).length;
     const vencendo = contratos.filter((c) => c.dataFim >= dataEmDias(0) && c.dataFim <= dataEmDias(30));
     const ativos = contratos.filter((c) => !c.dataFim || c.dataFim >= dataEmDias(0));
+    const pagamentos = Object.fromEntries(funcionarios.map((f) => [f.nome, f.pagamento || 0]));
+    
 
     document.getElementById('cartoes').innerHTML = [
       ['Clientes', clientes.length, 'Cliente.html'], ['Contratos ativos', contratos.length, 'Contrato.html'],
@@ -408,6 +410,7 @@ async function montarDashboard() {
     desenharBarras('graficoTipoContrato', contarPor(contratos, 'tipoContrato'));
     desenharBarras('graficoCidade', contarPor(clientes, 'cidade'), { rotular: (nome) => nome });
     desenharRosca('graficoTipoCliente', contarPor(clientes, 'tipoCliente'));
+    desenharBarras('graficoPagamentoFuncionarios', pagamentos, { rotular: (nome) => nome, valor: formatarMoeda });
 
     const equipPorContrato = contarPor(
       equipamentos.map((e) => ({ contrato: nomeContrato.get(e.contratoId) ?? 'Sem contrato' })), 'contrato');
