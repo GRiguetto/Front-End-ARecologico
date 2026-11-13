@@ -382,9 +382,10 @@ async function montarDashboard() {
     const faturamento = somar(concluidas, 'valor');
     const emAberto = ordens.filter((o) => ['ABERTA', 'EM_ANDAMENTO'].includes(o.status)).length;
     const vencendo = contratos.filter((c) => c.dataFim >= dataEmDias(0) && c.dataFim <= dataEmDias(30));
+    const ativos = contratos.filter((c) => !c.dataFim || c.dataFim >= dataEmDias(0));
 
     document.getElementById('cartoes').innerHTML = [
-      ['Clientes', clientes.length, 'Cliente.html'], ['Contratos', contratos.length, 'Contrato.html'],
+      ['Clientes', clientes.length, 'Cliente.html'], ['Contratos ativos', contratos.length, 'Contrato.html'],
       ['OS em aberto', emAberto, 'Servico.html'], ['Faturamento no período', formatarMoeda(faturamento)],
       ['Ticket médio por OS', formatarMoeda(concluidas.length ? faturamento / concluidas.length : 0)],
       ['Contratos vencendo em 30 dias', vencendo.length, 'Contrato.html'],
