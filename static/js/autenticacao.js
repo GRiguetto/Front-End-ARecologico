@@ -46,11 +46,11 @@ const Autenticacao = {
 
   sair() {
     sessionStorage.removeItem(CHAVE_SESSAO);
-    location.href = 'login.html';
+    location.href = '/login.html';
   },
 
   exigirLogin() {
-    if (!this.sessao()) location.replace('login.html');
+    if (!this.sessao()) location.replace('/login.html');
   },
 };
 
