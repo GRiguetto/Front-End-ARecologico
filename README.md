@@ -145,7 +145,7 @@ No topo há o seletor **Período das OS** (30 dias, 90 dias, 6 meses — padrão
 | Pagamento por funcionário | barras | `VW_PAGAMENTO_PRESTADOR_SERVICO` |
 | Faturamento líquido por serviço | barras | `VW_OS_SERVICOS_REALIZADOS` |
 
-O dashboard calcula a maior parte dos indicadores no navegador a partir das listas da API. As integrações graduais atuais são **Faturamento no período** (`GET /dashboard/faturamento`) e **Ticket médio por OS** (`GET /dashboard/ticket-medio`), com datas no período selecionado, e **Equipamentos por contrato** (`GET /dashboard/equipamentos-por-contrato`). Com `USAR_DADOS_FALSOS = true`, os valores são calculados a partir dos dados fictícios. As outras métricas continuam com o cálculo atual até serem integradas uma a uma.
+O dashboard calcula a maior parte dos indicadores no navegador a partir das listas da API. As integrações graduais atuais são **Faturamento no período** (`GET /dashboard/faturamento`) e **Ticket médio por OS** (`GET /dashboard/ticket-medio`), com datas no período selecionado; **Equipamentos por contrato** (`GET /dashboard/equipamentos-por-contrato`); e **Últimas ordens de serviço** (`GET /dashboard/ultimas-os`), também filtradas pelo período. Com `USAR_DADOS_FALSOS = true`, os valores são calculados a partir dos dados fictícios. As outras métricas continuam com o cálculo atual até serem integradas uma a uma.
 
 Os gráficos são feitos só com HTML/CSS (barras com `div`, rosca com `conic-gradient`), sem biblioteca.
 
@@ -826,7 +826,7 @@ Com isso, `http://localhost:8080/login.html` abre o sistema, e os caminhos `../s
 
 ## 15. Endpoints opcionais do dashboard (views do banco)
 
-Os cartões **Faturamento no período** e **Ticket médio por OS** e o gráfico **Equipamentos por contrato** já consomem os endpoints correspondentes abaixo. As outras integrações podem ser feitas individualmente, mantendo os cálculos atuais enquanto cada endpoint não estiver pronto.
+Os cartões **Faturamento no período** e **Ticket médio por OS** e os gráficos **Equipamentos por contrato** e **Últimas ordens de serviço** já consomem os endpoints correspondentes abaixo. O endpoint `ultimas-os` recebe `inicio` e `fim` opcionais e retorna até cinco ordens ordenadas da mais recente para a mais antiga. As outras integrações podem ser feitas individualmente, mantendo os cálculos atuais enquanto cada endpoint não estiver pronto.
 
 | Endpoint sugerido | Origem no banco | JSON sugerido |
 |---|---|---|
@@ -840,7 +840,7 @@ Os cartões **Faturamento no período** e **Ticket médio por OS** e o gráfico 
 | `GET /api/dashboard/equipamentos-por-contrato` | `VW_CONTRATOS_PESSOAS_EQUIPAMENTOS` | `[ { "contrato": "...", "qtdTotal": 3 }, ... ]` |
 | `GET /api/dashboard/pagamento-funcionarios` | `VW_PAGAMENTO_PRESTADOR_SERVICO` | `[ { "nome": "Rafael Costa", "pagamento": 2500 }, ... ]` |
 | `GET /api/dashboard/faturamento-servicos` | `VW_OS_SERVICOS_REALIZADOS` (soma de `VALOR_LIQUIDO` por serviço) | `[ { "servico": "Limpeza completa", "valorLiquido": 3200 }, ... ]` |
-| `GET /api/dashboard/ultimas-os` | `VW_ORDENS_SERVICO_PESSOAS` | `[ { "cliente": "...", "problema": "...", "funcionario": "...", "status": "ABERTA", "dataAbertura": "...", "dataEncerramento": null, "valor": 480 }, ... ]` |
+| `GET /api/dashboard/ultimas-os?inicio=2026-06-01&fim=2026-11-13` | `VW_ORDENS_SERVICO_PESSOAS` | `[ { "cliente": "...", "problema": "...", "funcionario": "...", "status": "ABERTA", "dataAbertura": "...", "dataEncerramento": null, "valor": 480 }, ... ]` |
 
 Exemplo de como consumir views e funções com `JdbcTemplate` (sem criar entidade JPA):
 

@@ -121,6 +121,11 @@ function filtrarOrdensConcluidasNoPeriodo(inicio, fim) {
   });
 }
 
+function normalizarStatusOs(status) {
+  const normalizado = status.trim().toUpperCase().replace(/\s+/g, '_');
+  return normalizado === 'CANCELADO' ? 'CANCELADA' : normalizado;
+}
+
 const Repositorio = {
   async listar(recurso) {
     return USAR_DADOS_FALSOS ? lerLocal(recurso) : requisitar(`/${recurso}`);
@@ -181,6 +186,48 @@ const Repositorio = {
       contrato: contrato.descricao,
       qtdTotal: quantidadePorContrato.get(contrato.id) || 0,
     }));
+  },
+
+  async ultimasOrdens(inicio, fim, ordens, clienteDoContrato, nomeFuncionario) {
+    if (USAR_DADOS_FALSOS) {
+      return ordens
+        .filter((ordem) => {
+          const data = ordem.dataAbertura;
+          if (inicio && (!data || data < inicio)) return false;
+          if (fim && (!data || data > fim)) return false;
+          return true;
+        })
+        .sort((a, b) => (b.dataAbertura || '').localeCompare(a.dataAbertura || ''))
+        .slice(0, 5)
+        .map((ordem) => ({
+          cliente: clienteDoContrato.get(ordem.contratoId) ?? '-',
+          problema: ordem.descricaoProblema,
+          funcionario: nomeFuncionario.get(ordem.funcionarioId) ?? '-',
+          status: ordem.status,
+          dataAbertura: ordem.dataAbertura ?? null,
+          dataEncerramento: ordem.dataExecucao ?? null,
+          valor: ordem.valor ?? null,
+        }));
+    }
+
+    const parametros = new URLSearchParams();
+    if (inicio) parametros.set('inicio', inicio);
+    if (fim) parametros.set('fim', fim);
+    const consulta = parametros.toString();
+    const resposta = await requisitar(`/dashboard/ultimas-os${consulta ? `?${consulta}` : ''}`);
+    const nullableString = (valor) => valor === null || typeof valor === 'string';
+    const listaValida = Array.isArray(resposta) && resposta.every((ordem) =>
+      ordem &&
+      typeof ordem.cliente === 'string' &&
+      typeof ordem.problema === 'string' &&
+      (ordem.funcionario === null || typeof ordem.funcionario === 'string') &&
+      typeof ordem.status === 'string' &&
+      STATUS_OS.includes(normalizarStatusOs(ordem.status)) &&
+      nullableString(ordem.dataAbertura) &&
+      nullableString(ordem.dataEncerramento) &&
+      (ordem.valor === null || (typeof ordem.valor === 'number' && Number.isFinite(ordem.valor))));
+    if (!listaValida) throw new Error('A API retornou uma lista inválida de últimas ordens de serviço.');
+    return resposta.map((ordem) => ({ ...ordem, status: normalizarStatusOs(ordem.status) }));
   },
 
   async salvar(recurso, registro) {
@@ -481,6 +528,7 @@ async function montarDashboard() {
   const mensagemFaturamento = document.getElementById('mensagemFaturamento');
   const mensagemTicketMedio = document.getElementById('mensagemTicketMedio');
   const mensagemEquipamentos = document.getElementById('mensagemEquipamentos');
+  const mensagemUltimasOs = document.getElementById('mensagemUltimasOs');
   let atualizacao = 0;
 
   async function carregarIndicador(consulta, mensagem, titulo, idAtualizacao) {
@@ -510,7 +558,7 @@ async function montarDashboard() {
     const concluidas = ordens.filter((o) => o.status === 'CONCLUIDA');
     const inicio = dias ? dataEmDias(-dias) : null;
     const fim = dias ? dataEmDias(0) : null;
-    const [faturamentoPeriodo, ticketMedio] = await Promise.all([
+    const [faturamentoPeriodo, ticketMedio, ordensRecentes] = await Promise.all([
       carregarIndicador(
         () => Repositorio.faturamentoPeriodo(inicio, fim),
         mensagemFaturamento,
@@ -521,6 +569,12 @@ async function montarDashboard() {
         () => Repositorio.ticketMedioPeriodo(inicio, fim),
         mensagemTicketMedio,
         'o ticket médio do período',
+        idAtualizacao,
+      ),
+      carregarIndicador(
+        () => Repositorio.ultimasOrdens(inicio, fim, todasOrdens, clienteDoContrato, nomeFuncionario),
+        mensagemUltimasOs,
+        'as últimas ordens de serviço',
         idAtualizacao,
       ),
     ]);
@@ -577,15 +631,20 @@ async function montarDashboard() {
       desenharBarras('graficoEquipamentos', equipPorContrato, { rotular: (nome) => nome });
     }
 
-    const recentes = [...ordens].sort((a, b) => (b.dataAbertura || '').localeCompare(a.dataAbertura || '')).slice(0, 5);
-    desenharTabelaResumo('ultimasOs',
-    ['Cliente', 'Problema', 'Funcionário', 'Status', 'Abertura', 'Encerramento', 'Valor'],
-   recentes.map((o) => [
-    clienteDoContrato.get(o.contratoId) ?? '-', o.descricaoProblema, nomeFuncionario.get(o.funcionarioId) ?? '-',
-    `<span class="selo selo-${o.status}">${formatarOpcao(o.status)}</span>`,
-    o.dataAbertura ? formatarData(o.dataAbertura) : '-', o.dataExecucao ? formatarData(o.dataExecucao) : '-',
-    o.valor ? formatarMoeda(o.valor) : '-']),
-    'Nenhuma OS no período.');
+    if (ordensRecentes === null) {
+      document.getElementById('ultimasOs').innerHTML = '<p class="vazio">Dados indisponíveis.</p>';
+    } else {
+      desenharTabelaResumo('ultimasOs',
+        ['Cliente', 'Problema', 'Funcionário', 'Status', 'Abertura', 'Encerramento', 'Valor'],
+        ordensRecentes.map((ordem) => [
+          ordem.cliente, ordem.problema, ordem.funcionario ?? '-',
+          `<span class="selo selo-${ordem.status}">${formatarOpcao(ordem.status)}</span>`,
+          ordem.dataAbertura ? formatarData(ordem.dataAbertura) : '-',
+          ordem.dataEncerramento ? formatarData(ordem.dataEncerramento) : '-',
+          ordem.valor ? formatarMoeda(ordem.valor) : '-',
+        ]),
+        'Nenhuma OS no período.');
+    }
     desenharTabelaResumo('contratosVencendo', ['Contrato', 'Termina em'],
       vencendo.map((c) => [c.descricao, formatarData(c.dataFim)]), 'Nenhum contrato vence nos próximos 30 dias.');
   }
