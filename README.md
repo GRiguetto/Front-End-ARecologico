@@ -99,7 +99,7 @@ Cartões de atalho para Clientes, Contratos e equipamentos, Serviços e ordens d
 - **Busca** no topo, que procura o texto em qualquer campo do registro (filtra no navegador).
 - **Botão "+ Novo"**, que abre uma janela (`<dialog>`) com o formulário.
 - **Tabela** com as colunas principais e os botões **Editar** e **Excluir** (com confirmação).
-- **Permissões:** administradores podem criar, editar e excluir; funcionários podem apenas consultar e pesquisar. Dashboard e Relatórios são restritos a administradores.
+- **Permissões:** administradores podem criar, editar e excluir; funcionários podem apenas consultar e pesquisar. Funcionários não veem valores de pagamento; Dashboard e Relatórios são restritos a administradores.
 - **Campos que dependem de outros:** CPF, RG, data de nascimento e e-mail só aparecem para pessoa física; CNPJ só para pessoa jurídica.
 - **Selects ligados a outra entidade:** o contrato escolhe um cliente, o equipamento escolhe um contrato, a OS escolhe contrato e funcionário. As listas vêm da API (ou do `localStorage`).
 - **Etiqueta colorida** para o status da OS (aberta, em andamento, concluída, cancelada).
@@ -276,7 +276,7 @@ POST /api/auth/login
 ```
 
 Depois disso, toda chamada leva o cabeçalho `Authorization: Bearer <token>`.
-O perfil `FUNCIONARIO` habilita somente consultas. O front-end oculta ações de escrita e bloqueia Dashboard/Relatórios para esse perfil; a API também deve validar o perfil no servidor para proteger os dados e as operações.
+O perfil `FUNCIONARIO` habilita somente consultas. O front-end oculta ações de escrita e valores de pagamento e bloqueia Dashboard/Relatórios para esse perfil; a API também deve validar o perfil no servidor e omitir campos salariais para proteger os dados e as operações.
 
 ## 9. Banco de dados SQL Server
 

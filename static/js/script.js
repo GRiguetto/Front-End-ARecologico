@@ -229,7 +229,10 @@ function iniciarTelaCrud(secao) {
   const caixaBusca = secao.querySelector('[data-busca]');
   const janela = secao.querySelector('dialog');
   const formulario = secao.querySelector('form');
-  const colunas = entidade.colunas.map((nome) => entidade.campos.find((c) => c.nome === nome));
+  const ocultarPagamentoFuncionario = !administrador && entidade.recurso === 'funcionarios';
+  const colunas = entidade.colunas
+    .filter((nome) => !ocultarPagamentoFuncionario || nome !== 'pagamento')
+    .map((nome) => entidade.campos.find((c) => c.nome === nome));
 
   secao.querySelector('thead').innerHTML =
     `<tr>${colunas.map((c) => `<th>${c.rotulo}</th>`).join('')}${administrador ? '<th>Ações</th>' : ''}</tr>`;
@@ -237,7 +240,12 @@ function iniciarTelaCrud(secao) {
   async function atualizarTabela() {
     const [registros, rotulos] = await Promise.all([Repositorio.listar(entidade.recurso), carregarRotulos(entidade)]);
     const termo = caixaBusca.value.toLowerCase();
-    const filtrados = registros.filter((r) => JSON.stringify(Object.values(r)).toLowerCase().includes(termo));
+    const filtrados = registros.filter((r) => {
+      const valores = ocultarPagamentoFuncionario
+        ? Object.entries(r).filter(([nome]) => nome !== 'pagamento').map(([, valor]) => valor)
+        : Object.values(r);
+      return JSON.stringify(valores).toLowerCase().includes(termo);
+    });
 
     corpoTabela.innerHTML = filtrados.length
       ? filtrados.map((registro) => `
