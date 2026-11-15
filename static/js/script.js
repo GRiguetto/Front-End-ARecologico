@@ -159,6 +159,30 @@ const Repositorio = {
     return Number((valores.reduce((total, valor) => total + valor, 0) / valores.length).toFixed(2));
   },
 
+  async equipamentosPorContrato(contratos) {
+    if (!USAR_DADOS_FALSOS) {
+      const resposta = await requisitar('/dashboard/equipamentos-por-contrato');
+      if (!Array.isArray(resposta) || resposta.some((item) =>
+        !item || typeof item.contrato !== 'string' || typeof item.qtdTotal !== 'number' || !Number.isFinite(item.qtdTotal))) {
+        throw new Error('A API retornou uma lista inválida de equipamentos por contrato.');
+      }
+      return resposta;
+    }
+
+    const equipamentos = lerLocal('equipamentos');
+    const quantidadePorContrato = new Map();
+    equipamentos.forEach((equipamento) => {
+      quantidadePorContrato.set(
+        equipamento.contratoId,
+        (quantidadePorContrato.get(equipamento.contratoId) || 0) + 1,
+      );
+    });
+    return contratos.map((contrato) => ({
+      contrato: contrato.descricao,
+      qtdTotal: quantidadePorContrato.get(contrato.id) || 0,
+    }));
+  },
+
   async salvar(recurso, registro) {
     Autenticacao.exigirAdministrador();
     if (!USAR_DADOS_FALSOS) {
@@ -443,11 +467,9 @@ function desenharTabelaResumo(idElemento, cabecalhos, linhas, textoVazio) {
 async function montarDashboard() {
   const seletor = document.getElementById('periodo');
 
-  const [clientes, contratos, todasOrdens, funcionarios, equipamentos] = await Promise.all(
-    ['clientes', 'contratos', 'ordensServico', 'funcionarios', 'equipamentos'].map((chave) => Repositorio.listar(ENTIDADES[chave].recurso)));
+  const [clientes, contratos, todasOrdens, funcionarios] = await Promise.all(
+    ['clientes', 'contratos', 'ordensServico', 'funcionarios'].map((chave) => Repositorio.listar(ENTIDADES[chave].recurso)));
   const nomeFuncionario = new Map(funcionarios.map((f) => [f.id, f.nome]));
-
-  const nomeContrato = new Map(contratos.map((c) => [c.id, c.descricao]));
 
   const nomeCliente = new Map(clientes.map((c) => [c.id, c.nome]));
   const clienteDoContrato = new Map(contratos.map((c) => [c.id, nomeCliente.get(c.clienteId)]));
@@ -458,6 +480,7 @@ async function montarDashboard() {
 
   const mensagemFaturamento = document.getElementById('mensagemFaturamento');
   const mensagemTicketMedio = document.getElementById('mensagemTicketMedio');
+  const mensagemEquipamentos = document.getElementById('mensagemEquipamentos');
   let atualizacao = 0;
 
   async function carregarIndicador(consulta, mensagem, titulo, idAtualizacao) {
@@ -472,6 +495,13 @@ async function montarDashboard() {
       return null;
     }
   }
+
+  const equipamentosPorContrato = await carregarIndicador(
+    () => Repositorio.equipamentosPorContrato(contratos),
+    mensagemEquipamentos,
+    'os equipamentos por contrato',
+    0,
+  );
 
   async function atualizar() {
     const idAtualizacao = ++atualizacao;
@@ -538,9 +568,14 @@ async function montarDashboard() {
     desenharBarras('graficoPagamentoFuncionarios', pagamentos, { rotular: (nome) => nome, valor: formatarMoeda });
     desenharBarras('graficoServicos', liquidoPorServico, { rotular: (nome) => nome, valor: formatarMoeda });
 
-    const equipPorContrato = contarPor(
-      equipamentos.map((e) => ({ contrato: nomeContrato.get(e.contratoId) ?? 'Sem contrato' })), 'contrato');
-    desenharBarras('graficoEquipamentos', equipPorContrato, { rotular: (nome) => nome });
+    if (equipamentosPorContrato === null) {
+      document.getElementById('graficoEquipamentos').innerHTML = '<p class="vazio">Dados indisponíveis.</p>';
+    } else {
+      const equipPorContrato = Object.fromEntries(
+        equipamentosPorContrato.map(({ contrato, qtdTotal }) => [contrato, qtdTotal]),
+      );
+      desenharBarras('graficoEquipamentos', equipPorContrato, { rotular: (nome) => nome });
+    }
 
     const recentes = [...ordens].sort((a, b) => (b.dataAbertura || '').localeCompare(a.dataAbertura || '')).slice(0, 5);
     desenharTabelaResumo('ultimasOs',
