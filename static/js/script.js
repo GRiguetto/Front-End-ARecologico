@@ -111,6 +111,7 @@ const Repositorio = {
   },
 
   async salvar(recurso, registro) {
+    Autenticacao.exigirAdministrador();
     if (!USAR_DADOS_FALSOS) {
       return registro.id
         ? requisitar(`/${recurso}/${registro.id}`, 'PUT', registro)
@@ -125,6 +126,7 @@ const Repositorio = {
   },
 
   async excluir(recurso, id) {
+    Autenticacao.exigirAdministrador();
     if (!USAR_DADOS_FALSOS) return requisitar(`/${recurso}/${id}`, 'DELETE');
     gravarLocal(recurso, lerLocal(recurso).filter((item) => item.id !== id));
   },
@@ -132,14 +134,21 @@ const Repositorio = {
 
 // ---------- Menu lateral ----------
 const LINKS_MENU = [
-  ['../index.html', 'Início'], ['../templates/Dashboard.html', 'Dashboard'], ['../templates/Cliente.html', 'Clientes'],
-  ['../templates/Contrato.html', 'Contratos'], ['../templates/Servico.html', 'Serviços / OS'], ['../templates/Funcionario.html', 'Funcionários'], ['../templates/Relatorio.html', 'Relatórios'],
+  ['index.html', 'Início'], ['templates/Dashboard.html', 'Dashboard'], ['templates/Cliente.html', 'Clientes'],
+  ['templates/Contrato.html', 'Contratos'], ['templates/Servico.html', 'Serviços / OS'], ['templates/Funcionario.html', 'Funcionários'], ['templates/Relatorio.html', 'Relatórios'],
 ];
 
 function montarMenu() {
   const paginaAtual = location.pathname.split('/').pop() || 'index.html';
-  const links = LINKS_MENU.map(([arquivo, nome]) =>
-    `<a href="${arquivo}" class="${arquivo === paginaAtual ? 'ativo' : ''}">${nome}</a>`).join('');
+  const administrador = Autenticacao.ehAdministrador();
+  const prefixo = location.pathname.toLowerCase().includes('/templates/') ? '../' : '';
+  document.querySelectorAll('[data-admin-only]').forEach((item) => { item.hidden = !administrador; });
+  const links = LINKS_MENU
+    .filter(([, nome]) => administrador || !['Dashboard', 'Relatórios'].includes(nome))
+    .map(([arquivo, nome]) => {
+      const ativo = arquivo.split('/').pop().toLowerCase() === paginaAtual.toLowerCase();
+      return `<a href="${prefixo}${arquivo}" class="${ativo ? 'ativo' : ''}">${nome}</a>`;
+    }).join('');
   const usuario = Autenticacao.sessao()?.usuario ?? {};
   document.getElementById('menu').innerHTML = `<h1 class="marca-logo" role="img" href="./static/img/logo.png" aria-label="AR Ecológico"></h1><div class="links">${links}</div>
     <div class="usuario">Olá, <strong>${usuario.nome ?? 'visitante'}</strong>
@@ -192,26 +201,28 @@ function criarHtmlDoCampo(definicao) {
 }
 
 function criarEsqueleto(secao, entidade) {
+  const administrador = Autenticacao.ehAdministrador();
   secao.classList.add('secao');
   secao.innerHTML = `
     <h2>${entidade.titulo}</h2>
     <div class="barra-ferramentas">
       <input type="search" placeholder="Buscar..." data-busca>
-      <button type="button" data-novo>+ Novo</button>
+      ${administrador ? '<button type="button" data-novo>+ Novo</button>' : ''}
     </div>
     <div class="tabela-rolagem"><table><thead></thead><tbody></tbody></table></div>
-    <dialog><form class="formulario" method="dialog">
+    ${administrador ? `<dialog><form class="formulario" method="dialog">
       <input type="hidden" name="id">
       ${entidade.campos.map(criarHtmlDoCampo).join('')}
       <div class="rodape">
         <button type="button" class="secundario" data-cancelar>Cancelar</button>
         <button type="submit">Salvar</button>
       </div>
-    </form></dialog>`;
+    </form></dialog>` : ''}`;
 }
 
 function iniciarTelaCrud(secao) {
   const entidade = ENTIDADES[secao.dataset.entidade];
+  const administrador = Autenticacao.ehAdministrador();
   criarEsqueleto(secao, entidade);
 
   const corpoTabela = secao.querySelector('tbody');
@@ -221,7 +232,7 @@ function iniciarTelaCrud(secao) {
   const colunas = entidade.colunas.map((nome) => entidade.campos.find((c) => c.nome === nome));
 
   secao.querySelector('thead').innerHTML =
-    `<tr>${colunas.map((c) => `<th>${c.rotulo}</th>`).join('')}<th>Ações</th></tr>`;
+    `<tr>${colunas.map((c) => `<th>${c.rotulo}</th>`).join('')}${administrador ? '<th>Ações</th>' : ''}</tr>`;
 
   async function atualizarTabela() {
     const [registros, rotulos] = await Promise.all([Repositorio.listar(entidade.recurso), carregarRotulos(entidade)]);
@@ -231,11 +242,11 @@ function iniciarTelaCrud(secao) {
     corpoTabela.innerHTML = filtrados.length
       ? filtrados.map((registro) => `
         <tr>${colunas.map((c) => `<td data-rotulo="${c.rotulo}">${celulaDaTabela(c, registro[c.nome], rotulos)}</td>`).join('')}
-          <td class="acoes">
+          ${administrador ? `<td class="acoes">
             <button class="secundario" data-editar="${registro.id}">Editar</button>
             <button class="perigo" data-excluir="${registro.id}">Excluir</button>
-          </td></tr>`).join('')
-      : `<tr><td class="vazio" colspan="${colunas.length + 1}">Nenhum registro encontrado.</td></tr>`;
+          </td>` : ''}</tr>`).join('')
+      : `<tr><td class="vazio" colspan="${colunas.length + (administrador ? 1 : 0)}">Nenhum registro encontrado.</td></tr>`;
   }
 
   async function preencherSelects() {
@@ -260,6 +271,7 @@ function iniciarTelaCrud(secao) {
   }
 
   async function abrirFormulario(registro = {}) {
+    Autenticacao.exigirAdministrador();
     await preencherSelects();
     formulario.reset();
     formulario.elements.id.value = registro.id ?? '';
@@ -279,17 +291,20 @@ function iniciarTelaCrud(secao) {
     return registro;
   }
 
-  secao.querySelector('[data-novo]').addEventListener('click', () => abrirFormulario());
-  secao.querySelector('[data-cancelar]').addEventListener('click', () => janela.close());
-  caixaBusca.addEventListener('input', atualizarTabela);
-  formulario.addEventListener('change', atualizarCamposCondicionais);
+  if (administrador) {
+    secao.querySelector('[data-novo]').addEventListener('click', () => abrirFormulario());
+    secao.querySelector('[data-cancelar]').addEventListener('click', () => janela.close());
+    formulario.addEventListener('change', atualizarCamposCondicionais);
 
-  formulario.addEventListener('submit', async () => {
-    await Repositorio.salvar(entidade.recurso, lerFormulario());
-    await atualizarTabela();
-  });
+    formulario.addEventListener('submit', async () => {
+      await Repositorio.salvar(entidade.recurso, lerFormulario());
+      await atualizarTabela();
+    });
+  }
+  caixaBusca.addEventListener('input', atualizarTabela);
 
   corpoTabela.addEventListener('click', async (evento) => {
+    if (!administrador) return;
     const { editar, excluir } = evento.target.dataset;
     if (editar) {
       const registros = await Repositorio.listar(entidade.recurso);
@@ -450,6 +465,8 @@ async function montarDashboard() {
   seletor.addEventListener('change', atualizar);
   atualizar();
 }
+
+
 
 // ---------- Inicialização ----------
 if (USAR_DADOS_FALSOS && typeof semearDadosDeExemplo === 'function') semearDadosDeExemplo();

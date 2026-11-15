@@ -80,17 +80,18 @@ Enquanto `USAR_DADOS_FALSOS = true` (em `config.js`), tudo funciona offline: os 
 
 ## 3. Páginas
 
-Todas as telas (menos o login) montam o **menu lateral** automaticamente, exigem login e carregam o botão ⚙ de configurações. O menu tem: Início, Dashboard, Clientes, Contratos, Serviços / OS, Funcionários, Relatórios, além do nome do usuário e o botão **Sair**.
+Todas as telas (menos o login) montam o **menu lateral** automaticamente, exigem login e carregam o botão ⚙ de configurações. Administradores veem Início, Dashboard, Clientes, Contratos, Serviços / OS, Funcionários e Relatórios. Funcionários veem as telas de consulta, sem Dashboard ou Relatórios. Ambos veem o nome do usuário e o botão **Sair**.
 
 ### 3.1 `login.html` — Entrar
 - Formulário com e-mail e senha.
 - Mensagens de erro: "E-mail ou senha incorretos.", "Servidor indisponível…" e "Não foi possível entrar agora…".
 - A dica com o usuário de teste só aparece quando `USAR_DADOS_FALSOS = true`.
+- Nesse modo, use `admin@arecologico.com` ou `funcionario@arecologico.com`; a senha de ambos é `123456`.
 - Se já existe sessão, redireciona direto para `index.html`.
 - É a única página marcada com `data-publica` no `<body>` (as demais redirecionam para o login se não houver sessão).
 
 ### 3.2 `index.html` — Início
-Seis cartões de atalho: Clientes, Contratos e equipamentos, Serviços e ordens de serviço, Funcionários, Dashboard e Relatórios em PDF.
+Cartões de atalho para Clientes, Contratos e equipamentos, Serviços e ordens de serviço e Funcionários. Os atalhos para Dashboard e Relatórios em PDF aparecem somente para administradores.
 
 ### 3.3 Telas de cadastro (CRUD)
 `Cliente`, `Contrato`, `Servico` e `Funcionario` usam o mesmo motor: basta ter `<section data-entidade="nomeDaEntidade">` e o `script.js` constrói a tela inteira. Cada seção traz:
@@ -98,6 +99,7 @@ Seis cartões de atalho: Clientes, Contratos e equipamentos, Serviços e ordens 
 - **Busca** no topo, que procura o texto em qualquer campo do registro (filtra no navegador).
 - **Botão "+ Novo"**, que abre uma janela (`<dialog>`) com o formulário.
 - **Tabela** com as colunas principais e os botões **Editar** e **Excluir** (com confirmação).
+- **Permissões:** administradores podem criar, editar e excluir; funcionários podem apenas consultar e pesquisar. Dashboard e Relatórios são restritos a administradores.
 - **Campos que dependem de outros:** CPF, RG, data de nascimento e e-mail só aparecem para pessoa física; CNPJ só para pessoa jurídica.
 - **Selects ligados a outra entidade:** o contrato escolhe um cliente, o equipamento escolhe um contrato, a OS escolhe contrato e funcionário. As listas vêm da API (ou do `localStorage`).
 - **Etiqueta colorida** para o status da OS (aberta, em andamento, concluída, cancelada).
@@ -274,6 +276,7 @@ POST /api/auth/login
 ```
 
 Depois disso, toda chamada leva o cabeçalho `Authorization: Bearer <token>`.
+O perfil `FUNCIONARIO` habilita somente consultas. O front-end oculta ações de escrita e bloqueia Dashboard/Relatórios para esse perfil; a API também deve validar o perfil no servidor para proteger os dados e as operações.
 
 ## 9. Banco de dados SQL Server
 
@@ -926,7 +929,7 @@ Depois, com o front aberto, use o **F12 → aba Network** e olhe cada chamada: s
 1. **Sem paginação:** o front espera a lista inteira. Se adicionarem paginação, o front precisa mudar.
 2. **`contratoId` na OS** e **`cargo` do funcionário** (itens ⚠️ da seção 11) dependem do DER oficial.
 3. **Erros:** o front mostra mensagem genérica. Mensagens claras no corpo (`{"mensagem": "..."}`) permitem melhorar isso depois.
-4. **Perfis de acesso:** o login já devolve `perfil` (`ADMIN`), mas o front ainda não restringe telas por perfil.
+4. **Perfis de acesso:** o front usa `ADMIN` e `FUNCIONARIO` para controlar as telas. A API precisa aplicar as mesmas regras no servidor, pois restrições no navegador não substituem autorização no back-end.
 
 ---
 

@@ -16,9 +16,23 @@ const USUARIO_TESTE = {
   usuario: { id: 1, nome: 'Administrador', email: 'admin@arecologico.com', perfil: 'ADMIN' },
 };
 
+const FUNCIONARIO_TESTE = {
+  email: 'funcionario@arecologico.com',
+  senha: '123456',
+  usuario: { id: 2, nome: 'Funcionário', email: 'funcionario@arecologico.com', perfil: 'FUNCIONARIO' },
+};
+
 const Autenticacao = {
   sessao() {
     try { return JSON.parse(sessionStorage.getItem(CHAVE_SESSAO)); } catch { return null; }
+  },
+
+  ehAdministrador() {
+    return String(this.sessao()?.usuario?.perfil ?? '').trim().toUpperCase() === 'ADMIN';
+  },
+
+  exigirAdministrador() {
+    if (!this.ehAdministrador()) throw new Error('Apenas administradores podem alterar registros.');
   },
 
   cabecalhos() {
@@ -29,8 +43,10 @@ const Autenticacao = {
   async entrar(email, senha) {
     let sessao;
     if (USAR_DADOS_FALSOS) {
-      if (email !== USUARIO_TESTE.email || senha !== USUARIO_TESTE.senha) throw new Error('E-mail ou senha incorretos.');
-      sessao = { token: 'token-de-teste', usuario: USUARIO_TESTE.usuario };
+      const usuario = [USUARIO_TESTE, FUNCIONARIO_TESTE]
+        .find((teste) => email === teste.email && senha === teste.senha);
+      if (!usuario) throw new Error('E-mail ou senha incorretos.');
+      sessao = { token: 'token-de-teste', usuario: usuario.usuario };
     } else {
       const resposta = await fetch(`${URL_API}/auth/login`, {
         method: 'POST',
@@ -50,7 +66,14 @@ const Autenticacao = {
   },
 
   exigirLogin() {
-    if (!this.sessao()) location.replace('/login.html');
+    if (!this.sessao()) {
+      location.replace('/login.html');
+      return;
+    }
+    const pagina = location.pathname.split('/').pop().toLowerCase();
+    if (!this.ehAdministrador() && ['dashboard.html', 'relatorio.html'].includes(pagina)) {
+      location.replace(location.pathname.toLowerCase().includes('/templates/') ? '../index.html' : 'index.html');
+    }
   },
 };
 
