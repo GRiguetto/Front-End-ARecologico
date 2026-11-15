@@ -111,33 +111,52 @@ const chaveLocal = (recurso) => `arecologico_${recurso}`;
 const lerLocal = (recurso) => JSON.parse(localStorage.getItem(chaveLocal(recurso)) || '[]');
 const gravarLocal = (recurso, lista) => localStorage.setItem(chaveLocal(recurso), JSON.stringify(lista));
 
+function filtrarOrdensConcluidasNoPeriodo(inicio, fim) {
+  return lerLocal('ordens-servico').filter((ordem) => {
+    if (ordem.status !== 'CONCLUIDA') return false;
+    const data = ordem.dataExecucao || ordem.dataAbertura;
+    if (inicio && (!data || data < inicio)) return false;
+    if (fim && (!data || data > fim)) return false;
+    return true;
+  });
+}
+
 const Repositorio = {
   async listar(recurso) {
     return USAR_DADOS_FALSOS ? lerLocal(recurso) : requisitar(`/${recurso}`);
   },
 
-  async faturamentoPeriodo(inicio, fim) {
-    if (USAR_DADOS_FALSOS) {
-      return lerLocal('ordens-servico')
-        .filter((ordem) => ordem.status === 'CONCLUIDA')
-        .filter((ordem) => {
-          const data = ordem.dataExecucao || ordem.dataAbertura;
-          if (inicio && (!data || data < inicio)) return false;
-          if (fim && (!data || data > fim)) return false;
-          return true;
-        })
-        .reduce((total, ordem) => total + (ordem.valor || 0), 0);
-    }
-
+  async consultarIndicadorPeriodo(endpoint, campo, inicio, fim) {
     const parametros = new URLSearchParams();
     if (inicio) parametros.set('inicio', inicio);
     if (fim) parametros.set('fim', fim);
     const consulta = parametros.toString();
-    const resposta = await requisitar(`/dashboard/faturamento${consulta ? `?${consulta}` : ''}`);
-    if (typeof resposta?.faturamento !== 'number' || !Number.isFinite(resposta.faturamento)) {
-      throw new Error('A API retornou um faturamento inválido.');
+    const resposta = await requisitar(`/dashboard/${endpoint}${consulta ? `?${consulta}` : ''}`);
+    const valor = resposta?.[campo];
+    if (typeof valor !== 'number' || !Number.isFinite(valor)) {
+      throw new Error(`A API retornou um valor inválido para ${campo}.`);
     }
-    return resposta.faturamento;
+    return valor;
+  },
+
+  async faturamentoPeriodo(inicio, fim) {
+    if (!USAR_DADOS_FALSOS) {
+      return this.consultarIndicadorPeriodo('faturamento', 'faturamento', inicio, fim);
+    }
+    return filtrarOrdensConcluidasNoPeriodo(inicio, fim)
+      .reduce((total, ordem) => total + Number(ordem.valor || 0), 0);
+  },
+
+  async ticketMedioPeriodo(inicio, fim) {
+    if (!USAR_DADOS_FALSOS) {
+      return this.consultarIndicadorPeriodo('ticket-medio', 'ticketMedio', inicio, fim);
+    }
+    const valores = filtrarOrdensConcluidasNoPeriodo(inicio, fim)
+      .map((ordem) => ordem.valor)
+      .filter((valor) => valor !== null && valor !== undefined)
+      .map(Number);
+    if (!valores.length) return 0;
+    return Number((valores.reduce((total, valor) => total + valor, 0) / valores.length).toFixed(2));
   },
 
   async salvar(recurso, registro) {
@@ -438,28 +457,44 @@ async function montarDashboard() {
   const nomeServico = new Map(servicos.map((s) => [s.id, s.descricao]));
 
   const mensagemFaturamento = document.getElementById('mensagemFaturamento');
+  const mensagemTicketMedio = document.getElementById('mensagemTicketMedio');
   let atualizacao = 0;
+
+  async function carregarIndicador(consulta, mensagem, titulo, idAtualizacao) {
+    try {
+      const valor = await consulta();
+      if (idAtualizacao === atualizacao) mensagem.textContent = '';
+      return valor;
+    } catch (erro) {
+      if (idAtualizacao === atualizacao) {
+        mensagem.textContent = `Não foi possível carregar ${titulo}: ${erro.message}`;
+      }
+      return null;
+    }
+  }
 
   async function atualizar() {
     const idAtualizacao = ++atualizacao;
     const dias = Number(seletor.value);
     const ordens = dias ? todasOrdens.filter((o) => (o.dataAbertura || '') >= dataEmDias(-dias)) : todasOrdens;
     const concluidas = ordens.filter((o) => o.status === 'CONCLUIDA');
-    const faturamentoLocal = somar(concluidas, 'valor');
-    let faturamentoPeriodo;
-    try {
-      faturamentoPeriodo = await Repositorio.faturamentoPeriodo(
-        dias ? dataEmDias(-dias) : null,
-        dias ? dataEmDias(0) : null,
-      );
-    } catch (erro) {
-      if (idAtualizacao === atualizacao) {
-        mensagemFaturamento.textContent = `Não foi possível carregar o faturamento: ${erro.message}`;
-      }
-      return;
-    }
+    const inicio = dias ? dataEmDias(-dias) : null;
+    const fim = dias ? dataEmDias(0) : null;
+    const [faturamentoPeriodo, ticketMedio] = await Promise.all([
+      carregarIndicador(
+        () => Repositorio.faturamentoPeriodo(inicio, fim),
+        mensagemFaturamento,
+        'o faturamento do período',
+        idAtualizacao,
+      ),
+      carregarIndicador(
+        () => Repositorio.ticketMedioPeriodo(inicio, fim),
+        mensagemTicketMedio,
+        'o ticket médio do período',
+        idAtualizacao,
+      ),
+    ]);
     if (idAtualizacao !== atualizacao) return;
-    mensagemFaturamento.textContent = '';
 
     const emAberto = ordens.filter((o) => ['ABERTA', 'EM_ANDAMENTO'].includes(o.status)).length;
     const vencendo = contratos.filter((c) => c.dataFim >= dataEmDias(0) && c.dataFim <= dataEmDias(30));
@@ -469,8 +504,9 @@ async function montarDashboard() {
 
     document.getElementById('cartoes').innerHTML = [
       ['Clientes', clientes.length, 'Cliente.html'], ['Contratos ativos', contratos.length, 'Contrato.html'],
-      ['OS em aberto', emAberto, 'Servico.html'], ['Faturamento no período', formatarMoeda(faturamentoPeriodo)],
-      ['Ticket médio por OS', formatarMoeda(concluidas.length ? faturamentoLocal / concluidas.length : 0)],
+      ['OS em aberto', emAberto, 'Servico.html'],
+      ['Faturamento no período', faturamentoPeriodo === null ? 'Indisponível' : formatarMoeda(faturamentoPeriodo)],
+      ['Ticket médio por OS', ticketMedio === null ? 'Indisponível' : formatarMoeda(ticketMedio)],
       ['Contratos vencendo em 30 dias', vencendo.length, 'Contrato.html'],
     ].map(([nome, valor, link]) => {
       const conteudo = `<small>${nome}</small><strong>${valor}</strong>`;
