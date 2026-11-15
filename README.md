@@ -145,7 +145,7 @@ No topo há o seletor **Período das OS** (30 dias, 90 dias, 6 meses — padrão
 | Pagamento por funcionário | barras | `VW_PAGAMENTO_PRESTADOR_SERVICO` |
 | Faturamento líquido por serviço | barras | `VW_OS_SERVICOS_REALIZADOS` |
 
-Hoje o dashboard **calcula tudo no navegador** a partir das listas que a API devolve (`GET /clientes`, `/contratos`, `/ordens-servico`, `/funcionarios`, `/equipamentos`, `/servicos`, `/servicos-realizados`). Ou seja, o back-end **não precisa** criar endpoints próprios para o dashboard funcionar. A [seção 15](#15-endpoints-opcionais-do-dashboard-views-do-banco) explica a alternativa usando as views.
+O dashboard calcula a maior parte dos indicadores no navegador a partir das listas da API. Como primeira integração gradual, o cartão **Faturamento no período** usa `GET /dashboard/faturamento` quando `USAR_DADOS_FALSOS = false`; no modo de teste calcula o mesmo valor a partir das OS fictícias. As outras métricas continuam com o cálculo atual até serem integradas uma a uma.
 
 Os gráficos são feitos só com HTML/CSS (barras com `div`, rosca com `conic-gradient`), sem biblioteca.
 
@@ -826,7 +826,7 @@ Com isso, `http://localhost:8080/login.html` abre o sistema, e os caminhos `../s
 
 ## 15. Endpoints opcionais do dashboard (views do banco)
 
-**Não é obrigatório.** Hoje o dashboard calcula tudo no navegador. Mas, se quiserem que o banco faça as contas (que é o objetivo das views e funções), o back-end pode expor os endpoints abaixo e o Gabriel troca o cálculo local por essas chamadas. Combinem antes para não fazer em duplicidade.
+O cartão **Faturamento no período** já está preparado para consumir o primeiro endpoint abaixo. As outras integrações podem ser feitas individualmente, mantendo os cálculos atuais enquanto cada endpoint não estiver pronto.
 
 | Endpoint sugerido | Origem no banco | JSON sugerido |
 |---|---|---|

@@ -116,6 +116,30 @@ const Repositorio = {
     return USAR_DADOS_FALSOS ? lerLocal(recurso) : requisitar(`/${recurso}`);
   },
 
+  async faturamentoPeriodo(inicio, fim) {
+    if (USAR_DADOS_FALSOS) {
+      return lerLocal('ordens-servico')
+        .filter((ordem) => ordem.status === 'CONCLUIDA')
+        .filter((ordem) => {
+          const data = ordem.dataExecucao || ordem.dataAbertura;
+          if (inicio && (!data || data < inicio)) return false;
+          if (fim && (!data || data > fim)) return false;
+          return true;
+        })
+        .reduce((total, ordem) => total + (ordem.valor || 0), 0);
+    }
+
+    const parametros = new URLSearchParams();
+    if (inicio) parametros.set('inicio', inicio);
+    if (fim) parametros.set('fim', fim);
+    const consulta = parametros.toString();
+    const resposta = await requisitar(`/dashboard/faturamento${consulta ? `?${consulta}` : ''}`);
+    if (typeof resposta?.faturamento !== 'number' || !Number.isFinite(resposta.faturamento)) {
+      throw new Error('A API retornou um faturamento inválido.');
+    }
+    return resposta.faturamento;
+  },
+
   async salvar(recurso, registro) {
     Autenticacao.exigirAdministrador();
     if (!USAR_DADOS_FALSOS) {
@@ -413,11 +437,30 @@ async function montarDashboard() {
     ['servicos', 'servicos-realizados'].map((recurso) => Repositorio.listar(recurso)));
   const nomeServico = new Map(servicos.map((s) => [s.id, s.descricao]));
 
-  function atualizar() {
+  const mensagemFaturamento = document.getElementById('mensagemFaturamento');
+  let atualizacao = 0;
+
+  async function atualizar() {
+    const idAtualizacao = ++atualizacao;
     const dias = Number(seletor.value);
     const ordens = dias ? todasOrdens.filter((o) => (o.dataAbertura || '') >= dataEmDias(-dias)) : todasOrdens;
     const concluidas = ordens.filter((o) => o.status === 'CONCLUIDA');
-    const faturamento = somar(concluidas, 'valor');
+    const faturamentoLocal = somar(concluidas, 'valor');
+    let faturamentoPeriodo;
+    try {
+      faturamentoPeriodo = await Repositorio.faturamentoPeriodo(
+        dias ? dataEmDias(-dias) : null,
+        dias ? dataEmDias(0) : null,
+      );
+    } catch (erro) {
+      if (idAtualizacao === atualizacao) {
+        mensagemFaturamento.textContent = `Não foi possível carregar o faturamento: ${erro.message}`;
+      }
+      return;
+    }
+    if (idAtualizacao !== atualizacao) return;
+    mensagemFaturamento.textContent = '';
+
     const emAberto = ordens.filter((o) => ['ABERTA', 'EM_ANDAMENTO'].includes(o.status)).length;
     const vencendo = contratos.filter((c) => c.dataFim >= dataEmDias(0) && c.dataFim <= dataEmDias(30));
     const ativos = contratos.filter((c) => !c.dataFim || c.dataFim >= dataEmDias(0));
@@ -426,8 +469,8 @@ async function montarDashboard() {
 
     document.getElementById('cartoes').innerHTML = [
       ['Clientes', clientes.length, 'Cliente.html'], ['Contratos ativos', contratos.length, 'Contrato.html'],
-      ['OS em aberto', emAberto, 'Servico.html'], ['Faturamento no período', formatarMoeda(faturamento)],
-      ['Ticket médio por OS', formatarMoeda(concluidas.length ? faturamento / concluidas.length : 0)],
+      ['OS em aberto', emAberto, 'Servico.html'], ['Faturamento no período', formatarMoeda(faturamentoPeriodo)],
+      ['Ticket médio por OS', formatarMoeda(concluidas.length ? faturamentoLocal / concluidas.length : 0)],
       ['Contratos vencendo em 30 dias', vencendo.length, 'Contrato.html'],
     ].map(([nome, valor, link]) => {
       const conteudo = `<small>${nome}</small><strong>${valor}</strong>`;
