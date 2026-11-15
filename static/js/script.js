@@ -89,6 +89,12 @@ const ENTIDADES = {
   },
 };
 
+const CAMPOS_RESTRITOS_PARA_FUNCIONARIOS = {
+  funcionarios: ['pagamento'],
+  'ordens-servico': ['valor'],
+  servicos: ['valorServico'],
+};
+
 // ---------- Acesso a dados (único ponto que o back-end precisa atender) ----------
 async function requisitar(caminho, metodo = 'GET', corpo) {
   const resposta = await fetch(URL_API + caminho, {
@@ -229,9 +235,9 @@ function iniciarTelaCrud(secao) {
   const caixaBusca = secao.querySelector('[data-busca]');
   const janela = secao.querySelector('dialog');
   const formulario = secao.querySelector('form');
-  const ocultarPagamentoFuncionario = !administrador && entidade.recurso === 'funcionarios';
+  const camposRestritos = administrador ? [] : CAMPOS_RESTRITOS_PARA_FUNCIONARIOS[entidade.recurso] ?? [];
   const colunas = entidade.colunas
-    .filter((nome) => !ocultarPagamentoFuncionario || nome !== 'pagamento')
+    .filter((nome) => !camposRestritos.includes(nome))
     .map((nome) => entidade.campos.find((c) => c.nome === nome));
 
   secao.querySelector('thead').innerHTML =
@@ -241,8 +247,8 @@ function iniciarTelaCrud(secao) {
     const [registros, rotulos] = await Promise.all([Repositorio.listar(entidade.recurso), carregarRotulos(entidade)]);
     const termo = caixaBusca.value.toLowerCase();
     const filtrados = registros.filter((r) => {
-      const valores = ocultarPagamentoFuncionario
-        ? Object.entries(r).filter(([nome]) => nome !== 'pagamento').map(([, valor]) => valor)
+      const valores = camposRestritos.length
+        ? Object.entries(r).filter(([nome]) => !camposRestritos.includes(nome)).map(([, valor]) => valor)
         : Object.values(r);
       return JSON.stringify(valores).toLowerCase().includes(termo);
     });
